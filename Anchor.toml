@@ -1,0 +1,18 @@
+[features]
+seeds = false
+[programs.localnet]
+gateway_derive = "dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "localnet"
+wallet = "/Users/daniel/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[[test.genesis]]
+address = "gatem74V238djXdzWnJf94Wo1DcnuGkfijbf3AuBhfs"
+program = "tests/fixtures/solana_gateway_program.so"
