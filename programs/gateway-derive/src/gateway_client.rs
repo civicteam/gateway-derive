@@ -3,54 +3,44 @@ use anchor_lang::{
   error::Error,
   prelude::msg,
   solana_program::{
-    entrypoint::ProgramResult,
     program::invoke_signed,
-    sysvar::Sysvar, sysvar
   },
-  solana_program::epoch_schedule::Epoch
+  ToAccountInfo,
+  prelude::{Account, Signer, Sysvar}
 };
 use solana_gateway::{
-  instruction::{GatewayInstruction, issue_vanilla, add_gatekeeper},
-  state::get_gatekeeper_address_with_seed
+  instruction::{issue_vanilla, add_gatekeeper},
 };
-use crate::{AccountInfo, Pubkey, ErrorCode};
+use crate::{AccountInfo, DerivedPass, ErrorCode, Rent};
 
 pub(crate) const GATEKEEPER_SEED: &[u8; 22] = br"gateway_derive_gk_seed";
 
 /// Parameters for a CPI Issuing Gateway Tokens
 pub struct GatewayTokenIssueParams<'a: 'b, 'b> {
   /// the rent payer
-  /// CHECK TODO
-  pub payer: AccountInfo<'a>,
+  pub payer: Signer<'a>,
   /// the gatekeeper_network that the token is being issued for
-  /// CHECK TODO
-  pub gatekeeper_network: AccountInfo<'a>,
+  pub gatekeeper_network: Account<'a, DerivedPass>,
   /// the recipient of the gateway token
-  /// CHECK TODO
-  pub recipient: AccountInfo<'a>,
+  pub recipient: Signer<'a>,
   /// the recipient's gateway token account (to be initialised)
-  /// CHECK TODO
+  /// CHECK Verified by the Gateway program during the CPI call
   pub gateway_token: AccountInfo<'a>,
   /// the gatekeeper PDA
-  /// CHECK TODO
+  /// CHECK Verified by the Gateway program during the CPI call
   pub gatekeeper: AccountInfo<'a>,
   /// the gatekeeper account PDA (connecting the gatekeeper to the gk network)
-  /// CHECK TODO
+  /// CHECK Verified by the Gateway program during the CPI call
   pub gatekeeper_account: AccountInfo<'a>,
   /// the signer seeds for the gatekeeper PDA
-  /// CHECK TODO
   pub authority_signer_seeds: &'b [&'b [u8]],
-  /// the Gateway program
-  /// CHECK TODO
-  pub gateway_program: AccountInfo<'a>,
-  /// CHECK TODO (can we remove this?)
-  pub rent: AccountInfo<'a>,
+  pub rent: Sysvar<'a, Rent>,
 }
 
 pub fn issue_derived_pass(params: GatewayTokenIssueParams<'_, '_>) -> Result<(), Error> {
   msg!(
         "Issuing a gateway token on network {} to {}",
-        params.gatekeeper_network.key,
+        params.gatekeeper_network.to_account_info().key,
         params.recipient.key
     );
   invoke_signed(
@@ -59,18 +49,18 @@ pub fn issue_derived_pass(params: GatewayTokenIssueParams<'_, '_>) -> Result<(),
       params.recipient.key,
       params.gatekeeper_account.key,
       params.gatekeeper.key,
-      params.gatekeeper_network.key,
+      params.gatekeeper_network.to_account_info().key,
       None,
       None, // TODO Tmp
     ),
     &[
-      params.payer,
+      params.payer.to_account_info(),
       params.gateway_token,
-      params.recipient,
+      params.recipient.to_account_info(),
       params.gatekeeper_account,
       params.gatekeeper,
-      params.gatekeeper_network,
-      params.rent
+      params.gatekeeper_network.to_account_info(),
+      params.rent.to_account_info()
     ],
     &[params.authority_signer_seeds],
   ).or(Err(error!(ErrorCode::IssueError)))
@@ -79,47 +69,32 @@ pub fn issue_derived_pass(params: GatewayTokenIssueParams<'_, '_>) -> Result<(),
 /// Parameters for a CPI Adding a Gatekeeper
 pub struct AddGatekeeperParams<'a> {
   /// the rent payer
-  /// CHECK TODO
-  pub payer: AccountInfo<'a>,
-  /// the gatekeeper_network that the gatekeeper is being added to
-  /// CHECK TODO
-  pub gatekeeper_network: AccountInfo<'a>,
+  pub payer: Signer<'a>,
+  /// the gatekeeper_network that the token is being issued for
+  pub gatekeeper_network: Account<'a, DerivedPass>,
   /// the gatekeeper PDA
-  /// CHECK TODO
+  /// CHECK Already verified by the program at this point
   pub gatekeeper: AccountInfo<'a>,
   /// the gatekeeper account PDA (connecting the gatekeeper to the gk network)
-  /// CHECK TODO
+  /// CHECK Already verified by the program at this point
   pub gatekeeper_account: AccountInfo<'a>,
-  // /// the signer seeds for the gatekeeper account PDA
-  // /// CHECK TODO
-  // pub authority_signer_seeds: &'b [&'b [u8]],
-  /// the Gateway program
-  /// CHECK TODO
-  pub gateway_program: AccountInfo<'a>,
-  /// CHECK TODO (can we remove this?)
-  pub rent: AccountInfo<'a>,
+  pub rent: Sysvar<'a, Rent>,
 }
 
 pub fn add_derived_gatekeeper(params: AddGatekeeperParams<'_>) -> Result<(), Error> {
-  msg!(
-        "Adding gatekeeper {} to network {} (registering account {}, payer {})",
-    params.gatekeeper.key,
-    params.gatekeeper_network.key,
-    params.gatekeeper_account.key,
-    params.payer.key
-  );
+  let gatekeeper_network = params.gatekeeper_network.to_account_info();
   invoke_signed(
     &add_gatekeeper(
       params.payer.key,
       params.gatekeeper.key,
-      params.gatekeeper_network.key,
+      gatekeeper_network.key,
     ),
     &[
-      params.payer,
+      params.payer.to_account_info(),
       params.gatekeeper_account,
       params.gatekeeper,
-      params.gatekeeper_network,
-      params.rent
+      gatekeeper_network,
+      params.rent.to_account_info()
     ],
     &[],
   ).or(Err(error!(ErrorCode::IssueError)))

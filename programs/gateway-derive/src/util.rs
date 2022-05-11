@@ -1,16 +1,11 @@
-use anchor_lang::{
-  error,
-  error::Error,
-  prelude::msg,
-  solana_program::entrypoint::ProgramResult
-};
+use anchor_lang::{error, error::Error, prelude::msg, require};
 use solana_gateway::{
   Gateway,
   state::GatewayToken,
-  error::GatewayError
 };
-use crate::{AccountInfo, Pubkey, ErrorCode};
+use crate::{AccountInfo, ErrorCode, Pubkey};
 use num_traits::cast::AsPrimitive;
+use anchor_lang::prelude::{Program, System};
 
 type ParsedGatewayTokenAccount<'a> = (GatewayToken, u64);
 
@@ -34,6 +29,8 @@ pub fn check_has_matching_gateway_token<'a>(gateway_tokens: &[ParsedGatewayToken
   }
 }
 
+/// Check that each gatekeeper network has a matching gateway token. Errors if either a token is missing or a token is invalid
+/// e.g. not parseable, not currently active, not owned by the expected owner, etc.
 pub fn validate_component_passes(accounts: &[AccountInfo], gatekeeper_networks: &[Pubkey], expected_owner: &Pubkey) -> Result<(), Error> {
   let parsed_gateway_token_accounts: Vec<ParsedGatewayTokenAccount> = accounts
     .iter()
@@ -55,4 +52,14 @@ pub fn validate_component_passes(accounts: &[AccountInfo], gatekeeper_networks: 
       )
     })
     .collect()
+}
+
+pub fn validate_empty(account: &AccountInfo, system_program: &Program<System>) -> Result<(), Error> {
+  let account_size: u64 = account.lamports.borrow().as_();
+  require!(
+    account_size == 0,
+    ErrorCode::InvalidGatekeeper
+  );
+  require!(account.owner == system_program.key, ErrorCode::InvalidGatekeeper);
+  Ok(())
 }

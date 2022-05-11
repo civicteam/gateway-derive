@@ -1,11 +1,6 @@
-import {AnchorProvider, Program, Provider, web3, Wallet} from '@project-serum/anchor';
+import {Program, Provider, web3} from '@project-serum/anchor';
 import {findGatewayToken, getGatekeeperAccountAddress} from '@identity.com/solana-gateway-ts'
 import {GatewayDerive} from '../../target/types/gateway_derive';
-import {
-  GatekeeperNetworkService,
-  GatekeeperService,
-  SendableDataTransaction
-} from "@identity.com/solana-gatekeeper-lib";
 
 const GATEKEEPER_SEED = 'gateway_derive_gk_seed';
 const DERIVED_PASS_PROGRAM = new web3.PublicKey('dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip');
@@ -27,26 +22,6 @@ export const fetchProgram = async (provider: Provider): Promise<Program<GatewayD
 
   return new Program<GatewayDerive>(idl, DERIVED_PASS_PROGRAM, provider) as Program<GatewayDerive>;
 };
-
-export const sendGatewayTransaction = <T>(fn: () => Promise<SendableDataTransaction<T | null>>) =>
-  fn()
-    .then((result) => result.send())
-    .then(async (sendResult) => {
-      const resultData = await sendResult.confirm();
-      if (!resultData) throw new Error('Failed to execute transaction');
-      return resultData;
-    });
-
-export const addGatekeeper = async (provider: AnchorProvider, gatekeeperNetwork: web3.Keypair, gatekeeper: web3.Keypair): Promise<GatekeeperService> => {
-  // create a new gatekeeper network (no on-chain tx here)
-  const gknService = new GatekeeperNetworkService(provider.connection, gatekeeperNetwork);
-  const gkService = new GatekeeperService(provider.connection, gatekeeperNetwork.publicKey, gatekeeper);
-
-  // add the civic gatekeeper to this network
-  await sendGatewayTransaction(() => gknService.addGatekeeper(gatekeeper.publicKey));
-
-  return gkService;
-}
 
 /**
  * Convert a public key into an accountMeta object for passing into an instruction.

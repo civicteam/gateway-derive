@@ -1,20 +1,15 @@
 import * as anchor from "@project-serum/anchor";
 import {AnchorProvider, Program, Wallet, web3} from "@project-serum/anchor";
-import {GatewayDerive} from "../target/types/gateway_derive";
-import {
-  addGatekeeper,
-  sendGatewayTransaction,
-} from "../src/lib/util";
 import chai from "chai";
-import {fund} from "./gatekeeperUtils";
+import chaiAsPromised from "chai-as-promised";
 import {pluck} from 'ramda';
 import {GatekeeperService} from "@identity.com/solana-gatekeeper-lib";
-import chaiAsPromised from "chai-as-promised";
+import { findGatewayToken } from "@identity.com/solana-gateway-ts";
 
-import {
-  findGatewayToken,
-} from "@identity.com/solana-gateway-ts";
-import {DerivedPassService} from "../src/DerivedPassService";
+import {GatewayDerive} from "../target/types/gateway_derive";
+import {addGatekeeper, fund, sendGatewayTransaction} from "./gatekeeperUtils";
+
+import {DerivedPassService} from "../src/";
 
 chai.use(chaiAsPromised);
 
