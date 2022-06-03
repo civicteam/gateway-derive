@@ -3,7 +3,8 @@ mod gateway_client;
 
 use anchor_lang::prelude::*;
 use std::str::FromStr;
-use crate::gateway_client::{add_derived_gatekeeper, AddGatekeeperParams, GATEKEEPER_SEED, GatewayTokenIssueParams, issue_derived_pass};
+use crate::gateway_client::{add_derived_gatekeeper, AddGatekeeperParams, GatewayTokenIssueParams, issue_derived_pass};
+use crate::util::{DISCRIMINATOR_SIZE, PUBKEY_SIZE, U64_SIZE, U8_SIZE, FEE_SEED, GATEKEEPER_SEED};
 
 declare_id!("dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip");
 
@@ -18,7 +19,7 @@ impl Id for Gateway {
 
 #[program]
 pub mod gateway_derive {
-  use crate::util::{validate_component_passes, validate_empty};
+  use crate::util::{GATEKEEPER_SEED, get_validated_component_passes, pay_gatekeepers, validate_empty};
   use super::*;
 
   pub fn initialize(ctx: Context<Initialize>, source_gkns: Vec<Pubkey>, _size: u8, gatekeeper_bump: u8) -> Result<()> {
@@ -47,16 +48,27 @@ pub mod gateway_derive {
     Ok(())
   }
 
-  pub fn issue(ctx: Context<Issue>) -> Result<()> {
-    validate_component_passes(
-      ctx.remaining_accounts,
-      &ctx.accounts.derived_pass.source_gkns,
-      &ctx.accounts.recipient.key
-    )?;
-
+  pub fn issue<'info>(ctx: Context<'_, '_, '_, 'info, Issue<'info>>, fee_bumps: Vec<u8>) -> Result<()> {
     let system_program = &ctx.accounts.system_program;
     let gateway_token = ctx.accounts.gateway_token.to_account_info();
     validate_empty(&gateway_token, system_program)?;
+
+    if fee_bumps.len() != ctx.remaining_accounts.len() / 3 {
+      return Err(error!(ErrorCode::IncorrectFeeBumpCount));
+    }
+
+    let parsed_component_passes = get_validated_component_passes(
+      ctx.remaining_accounts,
+      &ctx.accounts.derived_pass.source_gkns,
+      &ctx.accounts.recipient.key,
+        fee_bumps.as_slice()
+    )?;
+
+    pay_gatekeepers(
+      &mut ctx.accounts.recipient,
+      parsed_component_passes,
+      &ctx.accounts.system_program.to_account_info()
+    )?;
 
     issue_derived_pass(
       GatewayTokenIssueParams {
@@ -77,6 +89,19 @@ pub mod gateway_derive {
 
     Ok(())
   }
+
+  pub fn create_fee(ctx: Context<CreateFee>, amount: u64, mint: Option<Pubkey>) -> Result<()> {
+    ctx.accounts.fee.version = 0;
+    ctx.accounts.fee.amount = amount;
+    ctx.accounts.fee.mint = mint;
+    Ok(())
+  }
+
+  pub fn update_fee(ctx: Context<UpdateFee>, amount: u64, mint: Option<Pubkey>) -> Result<()> {
+    ctx.accounts.fee.amount = amount;
+    ctx.accounts.fee.mint = mint;
+    Ok(())
+  }
 }
 
 #[account]
@@ -84,7 +109,23 @@ pub struct DerivedPass {
   pub version: u8,
   pub authority: Pubkey,
   pub gatekeeper_bump: u8,
-  pub source_gkns: Vec<Pubkey>,
+  pub source_gkns: Vec<Pubkey>
+}
+
+#[account]
+pub struct Fee {
+  pub version: u8,
+  pub amount: u64,
+  pub mint: Option<Pubkey>
+}
+
+impl Fee {
+  pub fn get_space() -> usize {
+    DISCRIMINATOR_SIZE
+      + U8_SIZE
+      + U64_SIZE
+      + PUBKEY_SIZE + 1 // mint: Optional marker adds 1 byte
+  }
 }
 
 #[derive(Accounts)]
@@ -117,6 +158,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(fee_bumps: Vec<u8>)]
 pub struct Issue<'info> {
   #[account()]
   derived_pass: Account<'info, DerivedPass>,
@@ -141,6 +183,38 @@ pub struct Issue<'info> {
   system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(amount: u64, mint: Option<Pubkey>)]
+pub struct CreateFee<'info> {
+  #[account(
+    init,
+    payer = authority,
+    space = Fee::get_space(),
+    seeds = [FEE_SEED.as_ref(), authority.key.to_bytes().as_ref(), gatekeeper_network.key.to_bytes().as_ref()],
+    bump
+    )]
+  fee: Account<'info, Fee>,
+  #[account(mut)]
+  authority: Signer<'info>, // the gatekeeper
+  /// CHECK: This can be any public key (in reality it should match a known gatekeeper network)
+  gatekeeper_network: UncheckedAccount<'info>,
+  rent: Sysvar<'info, Rent>,
+  system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(amount: u64, mint: Option<Pubkey>)]
+pub struct UpdateFee<'info> {
+  #[account(mut, seeds = [FEE_SEED, &authority.key.to_bytes(), &gatekeeper_network.key.to_bytes()], bump)]
+  fee: Account<'info, Fee>,
+  #[account(mut)]
+  authority: Signer<'info>, // the gatekeeper
+  /// CHECK: This can be any public key (in reality it should match a known gatekeeper network)
+  gatekeeper_network: UncheckedAccount<'info>,
+  rent: Sysvar<'info, Rent>,
+  system_program: Program<'info, System>,
+}
+
 #[error_code]
 pub enum ErrorCode {
   #[msg("At least one component pass is missing")]
@@ -152,6 +226,21 @@ pub enum ErrorCode {
   #[msg("An error occurred during pass issuance")]
   IssueError,
 
-  #[msg("The derived gatekeeper account must be empty")]
-  InvalidGatekeeper,
+  #[msg("The passed account must be empty")]
+  NonEmptyAccount,
+
+  #[msg("A gatekeeper account was passed that does not match the associated component pass gatekeeper")]
+  GatekeeperMismatch,
+
+  #[msg("At least one of the passed-in fee accounts is invalid")]
+  InvalidFeeAccount,
+
+  #[msg("An overflow error occurred during payment")]
+  PaymentOverflow,
+
+  #[msg("An underflow error occurred during payment")]
+  PaymentUnderflow,
+
+  #[msg("The list of fee bumps must be equal to the number of component gateway tokens")]
+  IncorrectFeeBumpCount,
 }

@@ -1,1 +1,1 @@
-export { DerivedPassService } from './DerivedPassService';
+export { DerivedPassService } from "./DerivedPassService";
