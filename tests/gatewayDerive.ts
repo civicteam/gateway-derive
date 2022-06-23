@@ -264,6 +264,77 @@ describe("gateway-derive", () => {
 
           return expect(shouldFail).to.be.rejectedWith(/GatekeeperMismatch/);
         });
+
+        it("should fail to remove the fee if not the owner", async () => {
+          // create a different gatekeeper that will attempt to remove the fee
+          const differentGatekeeper = web3.Keypair.generate();
+          const differentGatekeeperProvider = new AnchorProvider(
+            authorityProvider.connection,
+            new Wallet(differentGatekeeper),
+            AnchorProvider.defaultOptions()
+          );
+          const differentGatekeeperDerivedPassService = new DerivedPassService(
+            program,
+            differentGatekeeperProvider
+          );
+
+          // stub the client to pass the civic gatekeeper fee address
+          const deriveResult = await deriveGatekeeperFeeAddress(
+            civicGatekeeper.publicKey,
+            sourceGkns[1].publicKey,
+            program
+          );
+          sandbox
+            .stub(util, "deriveGatekeeperFeeAddress")
+            .resolves(deriveResult);
+
+          await fund(authorityProvider, differentGatekeeper.publicKey);
+
+          const shouldFail = differentGatekeeperDerivedPassService.unsetFee(
+            sourceGkns[1].publicKey
+          );
+
+          // The derived fee account address will not match the passed-in seeds
+          return expect(shouldFail).to.be.rejectedWith(/ConstraintSeeds/);
+        });
+
+        it("should remove the fee", async () => {
+          await civicGatekeeperDerivedPassService.unsetFee(
+            sourceGkns[1].publicKey
+          );
+
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+
+          const [feeAddress] = await deriveGatekeeperFeeAddress(
+            civicGatekeeper.publicKey,
+            sourceGkns[1].publicKey,
+            program
+          );
+
+          const account = await authorityProvider.connection.getAccountInfo(
+            feeAddress
+          );
+
+          expect(account).to.be.null;
+
+          const previousGatekeeperBalance =
+            await authorityProvider.connection.getBalance(
+              civicGatekeeper.publicKey
+            );
+
+          await service.issue(authority, derivedPass);
+
+          const newGatekeeperBalance =
+            await authorityProvider.connection.getBalance(
+              civicGatekeeper.publicKey
+            );
+
+          // no fee1 incurred this time.
+          const expectedTotalFee = fee0;
+          expect(newGatekeeperBalance - previousGatekeeperBalance).to.equal(
+            expectedTotalFee
+          );
+        });
       });
     });
   });

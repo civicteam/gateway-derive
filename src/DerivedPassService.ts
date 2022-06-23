@@ -201,4 +201,33 @@ export class DerivedPassService {
 
     return transactionSignature;
   }
+
+  async unsetFee(gatekeeperNetwork: web3.PublicKey): Promise<string> {
+    const [feeAddress, bump] = await deriveGatekeeperFeeAddress(
+      this.provider.wallet.publicKey,
+      gatekeeperNetwork,
+      this.program
+    );
+
+    const accounts = {
+      fee: feeAddress,
+      authority: this.provider.wallet.publicKey,
+      gatekeeperNetwork,
+    };
+
+    console.log("accounts", {
+      fee: feeAddress.toBase58(),
+      authority: this.provider.wallet.publicKey.toBase58(),
+      gatekeeperNetwork: gatekeeperNetwork.toBase58(),
+    });
+
+    const transactionSignature = await this.program.methods
+      .removeFee()
+      .accounts(accounts)
+      .rpc();
+
+    await this.provider.connection.confirmTransaction(transactionSignature);
+
+    return transactionSignature;
+  }
 }

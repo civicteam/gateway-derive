@@ -102,6 +102,10 @@ pub mod gateway_derive {
     ctx.accounts.fee.mint = mint;
     Ok(())
   }
+
+  pub fn remove_fee(_ctx: Context<RemoveFee>) -> Result<()> {
+    Ok(())
+  }
 }
 
 #[account]
@@ -213,6 +217,16 @@ pub struct UpdateFee<'info> {
   gatekeeper_network: UncheckedAccount<'info>,
   rent: Sysvar<'info, Rent>,
   system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RemoveFee<'info> {
+  #[account(mut, close = authority, seeds = [FEE_SEED, &authority.key.to_bytes(), &gatekeeper_network.key.to_bytes()], bump)]
+  fee: Account<'info, Fee>,
+  #[account(mut)]
+  authority: Signer<'info>, // the gatekeeper
+  /// CHECK: This can be any public key (in reality it should match a known gatekeeper network)
+  gatekeeper_network: UncheckedAccount<'info>,
 }
 
 #[error_code]

@@ -123,3 +123,9 @@ Fees can be changed after being set:
 const new_fee = 200_000_000 // 0.2 SOL 
 const txSignature = await gatekeeperService.setFee(gatekeeperNetwork, fee);
 ```
+
+or removed:
+
+```ts
+const txSignature = await gatekeeperService.unsetFee(gatekeeperNetwork);
+```
