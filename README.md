@@ -30,6 +30,15 @@ owned by the GatewayDerive program.
 - The gatekeeper for a derived pass is also a PDA, owned by the GatewayDerive program.
 In essence, this means that the program is the gatekeeper for the derived pass, and is the only entity that can issue tokens on it.
 
+## Fees
+
+Constituent pass issuers can register a Fee for use of a constituent pass in a derived pass issuance.
+
+Fees are paid from the derived pass recipient to the gatekeeper(s) that issued the constituent passes.
+Fees are registered per gatekeeper network + gatekeeper.
+
+Note: SOL only is supported at present, with plans to support SPL-Tokens in the future.
+
 ## Limitations
 
 This program is limited in what it can do, and care should be taken that it is not used in a way that is not intended.
@@ -94,4 +103,29 @@ import { DerivedPassService } from "@civic/solana-derived-pass";
 
 const service = await DerivedPassService.build(provider);
 const [txSignature, gatewayToken] = await service.issue(authority, derivedPass);
+```
+
+### Setting a fee
+
+Create an anchor provider with the gatekeeper wallet.
+
+```ts
+import { DerivedPassService } from "@civic/solana-derived-pass";
+
+const gatekeeperService = await DerivedPassService.build(provider);
+const fee = 100_000_000 // 0.1 SOL 
+const txSignature = await gatekeeperService.setFee(gatekeeperNetwork, fee);
+```
+
+Fees can be changed after being set:
+
+```ts
+const new_fee = 200_000_000 // 0.2 SOL 
+const txSignature = await gatekeeperService.setFee(gatekeeperNetwork, fee);
+```
+
+or removed:
+
+```ts
+const txSignature = await gatekeeperService.unsetFee(gatekeeperNetwork);
 ```

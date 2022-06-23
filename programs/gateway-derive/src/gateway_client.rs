@@ -13,8 +13,6 @@ use solana_gateway::{
 };
 use crate::{AccountInfo, DerivedPass, ErrorCode, Rent};
 
-pub(crate) const GATEKEEPER_SEED: &[u8; 22] = br"gateway_derive_gk_seed";
-
 /// Parameters for a CPI Issuing Gateway Tokens
 pub struct GatewayTokenIssueParams<'a: 'b, 'b> {
   /// the rent payer
