@@ -55,6 +55,7 @@ jobs:
           export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
           solana-keygen new
+          ls ~/.config/solana
 
       - name: install node_modules
         run: |
@@ -109,8 +110,8 @@ jobs:
       - name: build programs
         run: |
           export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
-          ls ./node_modules/.bin
           yarn anchor build
+          ls ~/.config/solana
 
       - name: run tests
         run: |
