@@ -22,6 +22,7 @@ jobs:
         with:
           path: |
             ~/.cache/solana/
+            ~/.config/solana/
             ~/.local/share/solana/
           key: solana-${{ runner.os }}-v0000-${{ env.solana_version }}
 
@@ -101,6 +102,7 @@ jobs:
         with:
           path: |
             ~/.cache/solana/
+            ~/.config/solana/
             ~/.local/share/solana/
           key: solana-${{ runner.os }}-v0000-${{ env.solana_version }}
 
