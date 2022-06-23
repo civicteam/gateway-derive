@@ -55,11 +55,6 @@ jobs:
           solana --version
           solana-keygen new
 
-      - name: install anchor
-        run: |
-          export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
-          npm install -g @project-serum/anchor-cli
-
       - name: install node_modules
         if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: |
