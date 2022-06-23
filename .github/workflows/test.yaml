@@ -59,7 +59,7 @@ jobs:
         if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: |
           export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
-          yarn install --ignore-scripts
+          yarn install --ignore-scripts --frozen-lockfile
 
 
   lint:
@@ -103,6 +103,7 @@ jobs:
       - name: build programs
         run: |
           export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
+          ls ./node_modules/.bin
           yarn anchor build
 
       - name: run tests
