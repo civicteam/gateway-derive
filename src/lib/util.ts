@@ -11,6 +11,7 @@ const FEE_SEED = "gateway_derive_fee_seed";
 const DERIVED_PASS_PROGRAM = new web3.PublicKey(
   "dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip"
 );
+const DERIVED_PASS_PROPERTIES_SIZE = 8 + 1;
 
 export const deriveGatekeeper = async (
   authority: web3.PublicKey,
@@ -77,7 +78,7 @@ export const toAccountMeta =
 export const toSimpleAccountMeta = toAccountMeta(false, false);
 
 export const calculateDerivedPassSize = (sourceGkns: web3.PublicKey[]) =>
-  16 + sourceGkns.length * 32 + 32;
+  16 + sourceGkns.length * 32 + 32 + DERIVED_PASS_PROPERTIES_SIZE;
 
 export const findComponentPassesForDerivedPass = async (
   program: Program<GatewayDerive>,
@@ -93,4 +94,16 @@ export const findComponentPassesForDerivedPass = async (
   );
   const sourcePasses = await Promise.all(sourcePassPromises);
   return sourcePasses.filter(Boolean);
+};
+
+// should match the FeeType enum in lib.rs
+// TODO Can anchor generate this mapping?
+export type FeeType = "IssuerOnly";
+export const feeTypeToInt = (feeType?: FeeType): number => {
+  switch (feeType) {
+    case "IssuerOnly":
+      return 0;
+    default:
+      throw new Error(`Unknown strategy: ${feeType}`);
+  }
 };

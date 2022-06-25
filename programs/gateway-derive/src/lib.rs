@@ -1,12 +1,18 @@
 mod gateway_client;
 mod util;
 
-use crate::gateway_client::{
-    add_derived_gatekeeper, issue_derived_pass, AddGatekeeperParams, GatewayTokenIssueParams,
+use crate::{
+    gateway_client::{
+        add_derived_gatekeeper, issue_derived_pass, AddGatekeeperParams, GatewayTokenParams,
+    },
+    util::{DISCRIMINATOR_SIZE, FEE_SEED, GATEKEEPER_SEED, PUBKEY_SIZE, U64_SIZE, U8_SIZE},
 };
-use crate::util::{DISCRIMINATOR_SIZE, FEE_SEED, GATEKEEPER_SEED, PUBKEY_SIZE, U64_SIZE, U8_SIZE};
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::clock::UnixTimestamp};
+use std::borrow::BorrowMut;
 use std::str::FromStr;
+
+#[macro_use]
+extern crate num_derive;
 
 declare_id!("dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip");
 
@@ -22,20 +28,30 @@ impl Id for Gateway {
 #[program]
 pub mod gateway_derive {
     use super::*;
-    use crate::util::{
-        get_validated_component_passes, pay_gatekeepers, validate_empty, GATEKEEPER_SEED,
+    use crate::gateway_client::refresh_derived_pass;
+    use crate::util::{create_or_update_fee, validate_gateway_token, Action};
+    use crate::{
+        gateway_client::{add_expirable_on_use, AddExpirableOnUseParams},
+        util::{
+            get_expiry_time, get_validated_component_passes, pay_gatekeepers, validate_empty,
+            GATEKEEPER_SEED,
+        },
     };
 
-    pub fn initialize(
-        ctx: Context<Initialize>,
+    pub fn initialize<'info>(
+        ctx: Context<'_, '_, '_, 'info, Initialize<'info>>,
         source_gkns: Vec<Pubkey>,
         _size: u8,
         gatekeeper_bump: u8,
+        properties: DerivedPassProperties,
     ) -> Result<()> {
         ctx.accounts.derived_pass.version = 0;
         ctx.accounts.derived_pass.authority = *ctx.accounts.authority.key;
         ctx.accounts.derived_pass.gatekeeper_bump = gatekeeper_bump;
         ctx.accounts.derived_pass.source_gkns = source_gkns;
+        ctx.accounts.derived_pass.properties = properties;
+
+        let mut remaining_accounts = ctx.remaining_accounts.iter();
 
         // ensure the gatekeeper account is empty
         let derived_gatekeeper = ctx.accounts.derived_gatekeeper.to_account_info();
@@ -51,6 +67,16 @@ pub mod gateway_derive {
             gatekeeper_account: derived_gatekeeper_account,
             rent: ctx.accounts.rent.clone(),
         })?;
+
+        if properties.expire_on_use {
+            let feature_account = remaining_accounts.next().unwrap();
+            add_expirable_on_use(AddExpirableOnUseParams {
+                payer: ctx.accounts.authority.clone(),
+                gatekeeper_network: ctx.accounts.derived_pass.clone(),
+                feature_account: feature_account.clone(),
+                system_program: ctx.accounts.system_program.clone(),
+            })?;
+        }
 
         Ok(())
     }
@@ -78,9 +104,10 @@ pub mod gateway_derive {
             &mut ctx.accounts.recipient,
             parsed_component_passes,
             &ctx.accounts.system_program.to_account_info(),
+            Action::Issue,
         )?;
 
-        issue_derived_pass(GatewayTokenIssueParams {
+        issue_derived_pass(GatewayTokenParams {
             payer: ctx.accounts.recipient.clone(),
             gatekeeper_network: ctx.accounts.derived_pass.clone(),
             recipient: ctx.accounts.recipient.clone(),
@@ -92,22 +119,93 @@ pub mod gateway_derive {
                 &ctx.accounts.derived_pass.authority.to_bytes(),
                 &[ctx.accounts.derived_pass.gatekeeper_bump],
             ],
+            expire_time: get_expiry_time(ctx.accounts.derived_pass.properties.expire_duration),
             rent: ctx.accounts.rent.clone(),
         })?;
 
         Ok(())
     }
 
-    pub fn create_fee(ctx: Context<CreateFee>, amount: u64, mint: Option<Pubkey>) -> Result<()> {
-        ctx.accounts.fee.version = 0;
-        ctx.accounts.fee.amount = amount;
-        ctx.accounts.fee.mint = mint;
+    pub fn refresh<'info>(
+        ctx: Context<'_, '_, '_, 'info, Refresh<'info>>,
+        fee_bumps: Vec<u8>,
+    ) -> Result<()> {
+        let gateway_program = &ctx.accounts.gateway_program;
+        let gateway_token = ctx.accounts.gateway_token.to_account_info();
+        validate_gateway_token(&gateway_token, gateway_program)?;
+
+        if fee_bumps.len() != ctx.remaining_accounts.len() / 3 {
+            return Err(error!(ErrorCode::IncorrectFeeBumpCount));
+        }
+
+        let parsed_component_passes = get_validated_component_passes(
+            ctx.remaining_accounts,
+            &ctx.accounts.derived_pass.source_gkns,
+            ctx.accounts.recipient.key,
+            fee_bumps.as_slice(),
+        )?;
+
+        pay_gatekeepers(
+            &mut ctx.accounts.recipient,
+            parsed_component_passes,
+            &ctx.accounts.system_program.to_account_info(),
+            Action::Refresh,
+        )?;
+
+        refresh_derived_pass(GatewayTokenParams {
+            payer: ctx.accounts.recipient.clone(),
+            gatekeeper_network: ctx.accounts.derived_pass.clone(),
+            recipient: ctx.accounts.recipient.clone(),
+            gateway_token,
+            gatekeeper: ctx.accounts.derived_gatekeeper.to_account_info(),
+            gatekeeper_account: ctx.accounts.derived_gatekeeper_account.to_account_info(),
+            authority_signer_seeds: &[
+                GATEKEEPER_SEED,
+                &ctx.accounts.derived_pass.authority.to_bytes(),
+                &[ctx.accounts.derived_pass.gatekeeper_bump],
+            ],
+            expire_time: get_expiry_time(ctx.accounts.derived_pass.properties.expire_duration),
+            rent: ctx.accounts.rent.clone(),
+        })?;
+
         Ok(())
     }
 
-    pub fn update_fee(ctx: Context<UpdateFee>, amount: u64, mint: Option<Pubkey>) -> Result<()> {
-        ctx.accounts.fee.amount = amount;
-        ctx.accounts.fee.mint = mint;
+    pub fn create_fee(
+        ctx: Context<CreateFee>,
+        issue_amount: u64,
+        refresh_amount: u64,
+        percentage: u8,
+        fee_type: u8, // Type: FeeType- Anchor does not yet provide mappings for enums
+        mint: Option<Pubkey>,
+    ) -> Result<()> {
+        create_or_update_fee(
+            ctx.accounts.fee.borrow_mut(),
+            issue_amount,
+            refresh_amount,
+            percentage,
+            fee_type,
+            mint,
+        );
+        Ok(())
+    }
+
+    pub fn update_fee(
+        ctx: Context<UpdateFee>,
+        issue_amount: u64,
+        refresh_amount: u64,
+        percentage: u8,
+        fee_type: u8, // Type: FeeType- Anchor does not yet provide mappings for enums
+        mint: Option<Pubkey>,
+    ) -> Result<()> {
+        create_or_update_fee(
+            ctx.accounts.fee.borrow_mut(),
+            issue_amount,
+            refresh_amount,
+            percentage,
+            fee_type,
+            mint,
+        );
         Ok(())
     }
 
@@ -116,29 +214,52 @@ pub mod gateway_derive {
     }
 }
 
+#[derive(Clone, Copy, Debug, AnchorDeserialize, AnchorSerialize, PartialEq)]
+pub struct DerivedPassProperties {
+    /// The amount of time in seconds that the derived pass is valid for.
+    pub expire_duration: Option<i64>, // i64 because that is the type of clock.unix_timestamp
+    /// If true, the derived pass can be immediately expired after use
+    pub expire_on_use: bool,
+}
+
 #[account]
 pub struct DerivedPass {
     pub version: u8,
     pub authority: Pubkey,
     pub gatekeeper_bump: u8,
     pub source_gkns: Vec<Pubkey>,
+    pub properties: DerivedPassProperties,
+}
+
+#[derive(Clone, Debug, AnchorDeserialize, AnchorSerialize, FromPrimitive)]
+pub enum FeeType {
+    IssuerOnly = 0,
+    // TODO support revenue share to derived pass authority
+}
+impl Default for FeeType {
+    fn default() -> Self {
+        FeeType::IssuerOnly
+    }
 }
 
 #[account]
 pub struct Fee {
     pub version: u8,
-    pub amount: u64,
+    pub fee_type: FeeType,
+    pub percentage: u8, // ignored if type = IssuerOnly - added now for future-compatibility
+    pub issue_amount: u64,
+    pub refresh_amount: u64,
     pub mint: Option<Pubkey>,
 }
-
 impl Fee {
     pub fn get_space() -> usize {
-        DISCRIMINATOR_SIZE + U8_SIZE + U64_SIZE + PUBKEY_SIZE + 1 // mint: Optional marker adds 1 byte
+        DISCRIMINATOR_SIZE + (3 * U8_SIZE) + U64_SIZE + U64_SIZE + PUBKEY_SIZE + 1
+        // mint: Optional marker adds 1 byte
     }
 }
 
 #[derive(Accounts)]
-#[instruction(source_gkns: Vec<Pubkey>, size: u8, gatekeeper_bump: u8)]
+#[instruction(source_gkns: Vec<Pubkey>, size: u8, gatekeeper_bump: u8, properties: DerivedPassProperties)]
 pub struct Initialize<'info> {
     #[account(init, payer = authority, space = size.into())]
     derived_pass: Account<'info, DerivedPass>,
@@ -193,15 +314,40 @@ pub struct Issue<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(amount: u64, mint: Option<Pubkey>)]
+#[instruction(fee_bumps: Vec<u8>)]
+pub struct Refresh<'info> {
+    #[account()]
+    derived_pass: Account<'info, DerivedPass>,
+    #[account(mut)]
+    recipient: Signer<'info>,
+    #[account(mut)]
+    /// The gateway token to be refreshed
+    ///  Must be a valid gateway token owned by the recipient
+    /// CHECK: the derivation is checked in the gateway program.
+    gateway_token: UncheckedAccount<'info>,
+    #[account()]
+    /// A PDA representing the gatekeeper.
+    /// CHECK: Checked in the CPI to the Gateway program
+    derived_gatekeeper: UncheckedAccount<'info>,
+    #[account(owner = Gateway::id())]
+    /// The account linking the derived gatekeeper to the derived_pass gatekeeper network
+    /// CHECK: Checked in the CPI to the Gateway program
+    derived_gatekeeper_account: UncheckedAccount<'info>,
+    gateway_program: Program<'info, Gateway>,
+    rent: Sysvar<'info, Rent>,
+    system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(issue_amount: u64, refresh_amount: u64, percentage: u8, fee_type: u8, mint: Option<Pubkey>)]
 pub struct CreateFee<'info> {
     #[account(
-    init,
-    payer = authority,
-    space = Fee::get_space(),
-    seeds = [FEE_SEED.as_ref(), authority.key.to_bytes().as_ref(), gatekeeper_network.key.to_bytes().as_ref()],
-    bump
-    )]
+  init,
+  payer = authority,
+  space = Fee::get_space(),
+  seeds = [FEE_SEED.as_ref(), authority.key.to_bytes().as_ref(), gatekeeper_network.key.to_bytes().as_ref()],
+  bump
+  )]
     fee: Account<'info, Fee>,
     #[account(mut)]
     authority: Signer<'info>, // the gatekeeper
@@ -212,7 +358,7 @@ pub struct CreateFee<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(amount: u64, mint: Option<Pubkey>)]
+#[instruction(issue_amount: u64, refresh_amount: u64, percentage: u8, fee_type: u8, mint: Option<Pubkey>)]
 pub struct UpdateFee<'info> {
     #[account(mut, seeds = [FEE_SEED, &authority.key.to_bytes(), &gatekeeper_network.key.to_bytes()], bump)]
     fee: Account<'info, Fee>,
@@ -245,6 +391,9 @@ pub enum ErrorCode {
     #[msg("An error occurred during pass issuance")]
     IssueError,
 
+    #[msg("An error occurred during pass refresh")]
+    RefreshError,
+
     #[msg("The passed account must be empty")]
     NonEmptyAccount,
 
@@ -262,4 +411,13 @@ pub enum ErrorCode {
 
     #[msg("The list of fee bumps must be equal to the number of component gateway tokens")]
     IncorrectFeeBumpCount,
+
+    #[msg("The feature account does not match the gateway feature")]
+    InvalidFeatureAccount,
+
+    #[msg("Missing expire time on refresh")]
+    MissingExpireTime,
+
+    #[msg("Invalid gateway token")]
+    InvalidGatewayToken,
 }

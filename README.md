@@ -45,13 +45,10 @@ This program is limited in what it can do, and care should be taken that it is n
 
 - After issuance, the validity of the derived pass type is *independent* of the validity of the constituent passes.
 This means, a constituent pass can be revoked or frozen, and the derived pass will still be considered valid.
-- The current implementation supports issue only, no refresh, freeze or revoke is possible.
-The requirement to refresh would, in part, mitigate the above issue, in that a pass could be defined to be valid
-for only as long as the constituent passes are valid.
+The solution to this is to set an expiry time on the derived pass
 - The current implementation supports "AND" only logic, when evaluating constituent passes.
 A potential improvement would be to allow derived passes that contain "OR" or "NOT", logic, allowing for alternative
 passes (in jurisdiction A OR in jurisdiction B, for example), or blacklists (does not possess token X).
-- The current implementation does not allow for gateway extensions, such as expirable passes, as yet.
 
 ## Usage
 
@@ -128,4 +125,45 @@ or removed:
 
 ```ts
 const txSignature = await gatekeeperService.unsetFee(gatekeeperNetwork);
+```
+
+A fee can also be set for refresh (see expiry below)
+
+```ts
+const txSignature = await gatekeeperService.setFee(gatekeeperNetwork, issueFee, refreshFee);
+```
+
+### Creating a pass with expiry
+
+```ts
+import { DerivedPassService } from "@civic/solana-derived-pass";
+
+const service = await DerivedPassService.build(provider);
+
+const [txSignature, derivedPass] = await service.derivePass([
+  new PublicKey("..."), // pass 1
+  new PublicKey("..."), // pass 2
+], {
+  expireDuration: 60 * 60 * 24 // expires after one day
+});
+```
+
+### Creating a pass that can be expired on use
+
+If you want the pass to be single-use, i.e. require refresh after every use,
+then you can use the `expireOnUse` option.
+
+Note: The integrating program must also call the expireToken instruction on the gateway program via CPI.
+
+```ts
+import { DerivedPassService } from "@civic/solana-derived-pass";
+
+const service = await DerivedPassService.build(provider);
+
+const [txSignature, derivedPass] = await service.derivePass([
+  new PublicKey("..."), // pass 1
+  new PublicKey("..."), // pass 2
+], {
+  expireOnUse: true
+});
 ```
