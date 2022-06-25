@@ -430,149 +430,56 @@ describe("gateway-derive", () => {
     });
   });
 
-  context("refresh", () => {
+  context("refresh an unrefreshable pass", () => {
     // create a pass with a short expiry
     const EXPIRE_DURATION = 1;
-    const BUFFER = 2; // allow 2 seconds leniency when checking expiry
 
-    let componentPassGatewayTokens: GatewayToken[];
     let derivedPassGatewayToken: GatewayToken;
-    let derivedPassExpiryTimestamp: number | undefined;
 
     before(
       "set up the owner (recipient) of the pass and fund them",
       createOwner
     );
 
-    before("generate the derived pass", async () => {
+    before("generate the derived pass with refresh disabled", async () => {
       const authorityService = new DerivedPassService(
         program,
         authorityProvider
       );
       [, derivedPass] = await authorityService.derivePass(sourceGknKeys, {
         expireDuration: EXPIRE_DURATION,
+        refreshDisabled: true,
       });
 
       service = new DerivedPassService(program, ownerProvider);
     });
 
     before("issue the component passes", async () => {
-      componentPassGatewayTokens = await Promise.all(
+      await Promise.all(
         civicGatekeeperServices.map((gks) =>
           sendGatewayTransaction(() => gks.issue(owner.publicKey))
         )
       );
     });
 
-    it("should derive an expired pass", async () => {
+    before("derive an expired pass", async () => {
       await service.issue(authority, derivedPass);
-
-      // wait until the token has expired
-      await new Promise((resolve) =>
-        setTimeout(resolve, EXPIRE_DURATION * 1000 * 5)
-      );
 
       derivedPassGatewayToken = await findGatewayToken(
         authorityProvider.connection,
         owner.publicKey,
         derivedPass
       );
-
-      derivedPassExpiryTimestamp = derivedPassGatewayToken.expiryTime;
-
-      const now = Math.floor(Date.now() / 1000);
-
-      expect(derivedPassExpiryTimestamp).to.be.lessThan(now + BUFFER);
-      expect(derivedPassGatewayToken.isValid()).to.be.false;
     });
 
-    it("should not allow refresh if a component pass is no longer valid", async () => {
-      await sendGatewayTransaction(() =>
-        civicGatekeeperServices[0].freeze(
-          componentPassGatewayTokens[0].publicKey
-        )
-      );
-
+    it("should not allow refresh", async () => {
       const shouldFail = service.refresh(
         derivedPassGatewayToken.publicKey,
         authority,
         derivedPass
       );
 
-      await expect(shouldFail).to.be.rejectedWith(/InvalidComponentPass./);
-    });
-
-    it("should allow refresh if the component passes are valid", async () => {
-      await sendGatewayTransaction(() =>
-        civicGatekeeperServices[0].unfreeze(
-          componentPassGatewayTokens[0].publicKey
-        )
-      );
-
-      await service.refresh(
-        derivedPassGatewayToken.publicKey,
-        authority,
-        derivedPass
-      );
-
-      derivedPassGatewayToken = await findGatewayToken(
-        authorityProvider.connection,
-        owner.publicKey,
-        derivedPass
-      );
-
-      // the expiry time has changed
-      expect(derivedPassGatewayToken.expiryTime).to.be.greaterThan(
-        derivedPassExpiryTimestamp
-      );
-    });
-
-    context("with fees", () => {
-      // refresh fee for the first constituent pass
-      const fee0 = 100;
-
-      let civicGatekeeperDerivedPassService: DerivedPassService;
-
-      before(() => {
-        const civicGatekeeperProvider = new AnchorProvider(
-          authorityProvider.connection,
-          new Wallet(civicGatekeeper),
-          AnchorProvider.defaultOptions()
-        );
-        civicGatekeeperDerivedPassService = new DerivedPassService(
-          program,
-          civicGatekeeperProvider
-        );
-      });
-
-      it("should register a refresh fee", async () => {
-        await civicGatekeeperDerivedPassService.setFee(
-          sourceGkns[0].publicKey,
-          0, // zero issuance fee
-          fee0
-        );
-      });
-
-      // Warning, this relies on the previous test running first to set the fee
-      it("should pay the component pass gatekeeper for the refresh", async () => {
-        const previousGatekeeperBalance =
-          await authorityProvider.connection.getBalance(
-            civicGatekeeper.publicKey
-          );
-
-        await service.refresh(
-          derivedPassGatewayToken.publicKey,
-          authority,
-          derivedPass
-        );
-
-        const newGatekeeperBalance =
-          await authorityProvider.connection.getBalance(
-            civicGatekeeper.publicKey
-          );
-
-        expect(newGatekeeperBalance - previousGatekeeperBalance).to.equal(fee0);
-      });
+      await expect(shouldFail).to.be.rejectedWith(/RefreshDisabled/);
     });
   });
 });

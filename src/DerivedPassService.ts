@@ -38,6 +38,7 @@ export interface Wallet {
 export type Properties = {
   expireDuration?: number;
   expireOnUse?: boolean;
+  refreshDisabled?: boolean;
 };
 
 export class DerivedPassService {
@@ -90,6 +91,7 @@ export class DerivedPassService {
       : null;
     const derivePassProperties = {
       expireOnUse: false,
+      refreshDisabled: false,
       ...properties,
       expireDuration: expireDurationBN,
     };
