@@ -93,7 +93,7 @@ export const findComponentPassesForDerivedPass = async (
     findGatewayToken(program.provider.connection, owner, sourcePassType)
   );
   const sourcePasses = await Promise.all(sourcePassPromises);
-  return sourcePasses.filter(Boolean);
+  return sourcePasses.filter(Boolean) as GatewayToken[];
 };
 
 // should match the FeeType enum in lib.rs
