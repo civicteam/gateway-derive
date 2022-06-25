@@ -1,12 +1,14 @@
 use crate::{id, AccountInfo, ErrorCode, Fee, Pubkey};
+use anchor_lang::solana_program::clock::UnixTimestamp;
 use anchor_lang::{
     error,
     error::Error,
     prelude::msg,
     prelude::{Account, Program, Signer, System},
     require,
-    solana_program::program::invoke,
-    solana_program::{system_instruction, system_program},
+    solana_program::{
+        clock::Clock, program::invoke, system_instruction, system_program, sysvar::Sysvar,
+    },
     Key, ToAccountInfo,
 };
 use num_traits::cast::AsPrimitive;
@@ -70,7 +72,6 @@ fn parse_fee_account<'a, 'b>(
     }
 
     if account_info.owner == &system_program::id() {
-        msg!("Fee account {} not found - not charging", account_info.key);
         if account_info.try_lamports().unwrap() == 0 {
             return Ok(None);
         } else {
@@ -128,18 +129,40 @@ fn parse_accounts<'a, 'b>(
         .collect::<Result<Vec<ParsedGatewayTokenAccountWithFee<'a, 'b>>, Error>>()
 }
 
+pub fn create_or_update_fee(
+    fee: &mut Account<Fee>,
+    issue_amount: u64,
+    refresh_amount: u64,
+    percentage: u8,
+    fee_type: u8, // Type: FeeType- Anchor does not yet provide mappings for enums
+    mint: Option<Pubkey>,
+) {
+    fee.version = 0;
+    fee.issue_amount = issue_amount;
+    fee.refresh_amount = refresh_amount;
+    fee.percentage = percentage;
+    fee.fee_type = num::FromPrimitive::from_u8(fee_type).unwrap();
+    fee.mint = mint;
+}
+
 /// Given a vector of gateway tokens (GTs) with associated fees and gatekeeper (GK) account objects
 /// Returns a map from the gatekeeper key to the lamports (only SOL supported so far) to be sent to it
 /// Unlike the input, which has a separate entry per GT, even if several (or all) are issued by the same GK,
 /// The output has a single entry per GK, referencing the first AccountInfo that points to it.
 pub fn fee_per_gatekeeper<'a, 'b>(
     gateway_tokens_with_fee: Vec<ParsedGatewayTokenAccountWithFee<'a, 'b>>,
+    action: Action,
 ) -> HashMap<Pubkey, (&'b AccountInfo<'a>, u64)> {
     let mut fee_map: HashMap<Pubkey, (&'b AccountInfo<'a>, u64)> = HashMap::new();
 
+    let get_amount = |f: Fee| match action {
+        Action::Issue => f.issue_amount,
+        Action::Refresh => f.refresh_amount,
+    };
+
     for (_, _, fee, gatekeeper) in gateway_tokens_with_fee {
         let current_entry = fee_map.entry(gatekeeper.key()).or_insert((gatekeeper, 0));
-        current_entry.1 += fee.map(|f| f.amount).unwrap_or(0);
+        current_entry.1 += fee.map(get_amount).unwrap_or(0);
     }
 
     fee_map
@@ -181,6 +204,18 @@ pub fn validate_empty(
     Ok(())
 }
 
+pub fn validate_gateway_token(
+    account: &AccountInfo,
+    gateway_program: &Program<crate::Gateway>,
+) -> Result<(), Error> {
+    require!(!account.data_is_empty(), ErrorCode::InvalidGatewayToken);
+    require!(
+        account.owner == gateway_program.key,
+        ErrorCode::InvalidGatewayToken
+    );
+    Ok(())
+}
+
 pub fn derive_fee_address(
     gatekeeper: &Pubkey,
     gatekeeper_network: &Pubkey,
@@ -198,15 +233,21 @@ pub fn derive_fee_address(
     .map_err(|_| error!(ErrorCode::InvalidFeeAccount))
 }
 
+pub enum Action {
+    Issue,
+    Refresh,
+}
+
 /// Given a list of gateway tokens with their associated fees and gatekeeper accounts, pay each gatekeeper for their usage
 /// bearing in mind that several gateway tokens may have been issued
 pub fn pay_gatekeepers<'a, 'b>(
     payer: &mut Signer<'a>,
     parsed_gateway_tokens: Vec<ParsedGatewayTokenAccountWithFee<'a, 'b>>,
     system_program: &AccountInfo<'a>,
+    action: Action,
 ) -> Result<u64, Error> {
     let fee_map: HashMap<Pubkey, (&'b AccountInfo<'a>, u64)> =
-        fee_per_gatekeeper(parsed_gateway_tokens);
+        fee_per_gatekeeper(parsed_gateway_tokens, action);
     let mut total_fee = 0;
 
     fee_map
@@ -234,4 +275,9 @@ pub fn pay_gatekeepers<'a, 'b>(
         })?;
 
     Ok(total_fee)
+}
+
+pub fn get_expiry_time(expire_duration: Option<i64>) -> Option<UnixTimestamp> {
+    let time_now = Clock::get().unwrap().unix_timestamp;
+    expire_duration.map(|duration| time_now + duration)
 }
