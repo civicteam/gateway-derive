@@ -130,6 +130,10 @@ pub mod gateway_derive {
         ctx: Context<'_, '_, '_, 'info, Refresh<'info>>,
         fee_bumps: Vec<u8>,
     ) -> Result<()> {
+        require!(
+            !ctx.accounts.derived_pass.properties.refresh_disabled,
+            ErrorCode::RefreshDisabled
+        );
         let gateway_program = &ctx.accounts.gateway_program;
         let gateway_token = ctx.accounts.gateway_token.to_account_info();
         validate_gateway_token(&gateway_token, gateway_program)?;
@@ -220,6 +224,9 @@ pub struct DerivedPassProperties {
     pub expire_duration: Option<i64>, // i64 because that is the type of clock.unix_timestamp
     /// If true, the derived pass can be immediately expired after use
     pub expire_on_use: bool,
+    /// If false, the derived pass cannot be refreshed.
+    /// Use this for "single-use" passes.
+    pub refresh_disabled: bool,
 }
 
 #[account]
@@ -393,6 +400,9 @@ pub enum ErrorCode {
 
     #[msg("An error occurred during pass refresh")]
     RefreshError,
+
+    #[msg("Attempt to refresh a pass whose refresh is disabled")]
+    RefreshDisabled,
 
     #[msg("The passed account must be empty")]
     NonEmptyAccount,

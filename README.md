@@ -150,10 +150,15 @@ const [txSignature, derivedPass] = await service.derivePass([
 
 ### Creating a pass that can be expired on use
 
-If you want the pass to be single-use, i.e. require refresh after every use,
+If you want the pass to require refresh after every use,
 then you can use the `expireOnUse` option.
 
-Note: The integrating program must also call the expireToken instruction on the gateway program via CPI.
+This is useful for component passes that have short expiry, so that the
+state of the component pass is checked automatically on every use.
+
+Note: For the expireOnUse function to be executed, 
+the integrating program must also call the expireToken instruction on the gateway program via CPI.
+ExpireOnUse does not happen automatically.
 
 ```ts
 import { DerivedPassService } from "@civic/solana-derived-pass";
@@ -167,3 +172,11 @@ const [txSignature, derivedPass] = await service.derivePass([
   expireOnUse: true
 });
 ```
+
+You may also want a single-use pass. For this, use the option:
+
+```ts
+refreshDisabled: true
+```
+
+alongside the `expireOnUse` feature.

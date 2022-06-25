@@ -11,7 +11,7 @@ const FEE_SEED = "gateway_derive_fee_seed";
 const DERIVED_PASS_PROGRAM = new web3.PublicKey(
   "dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip"
 );
-const DERIVED_PASS_PROPERTIES_SIZE = 8 + 1;
+const DERIVED_PASS_PROPERTIES_SIZE = 8 + 1 + 1;
 
 export const deriveGatekeeper = async (
   authority: web3.PublicKey,
