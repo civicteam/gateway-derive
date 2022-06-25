@@ -1,6 +1,6 @@
 {
   "name": "@civic/solana-derived-pass",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A Civic-Pass derivation library for Solana",
   "main": "dist/src/index.js",
   "author": "Daniel Kelleher <daniel@civic.com>",
