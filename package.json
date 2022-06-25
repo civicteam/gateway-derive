@@ -1,8 +1,17 @@
 {
+  "name": "@civic/solana-derived-pass",
+  "version": "0.0.2",
+  "description": "A Civic-Pass derivation library for Solana",
+  "main": "dist/src/index.js",
+  "author": "Daniel Kelleher <daniel@civic.com>",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "test": "anchor test"
+    "test": "anchor test",
+    "clean": "rimraf -rf ./dist",
+    "compile": "tsc -p tsconfig.json",
+    "build": "yarn clean && anchor build && yarn compile",
+    "prepare": "yarn build"
   },
   "dependencies": {
     "@identity.com/solana-gateway-ts": "^0.8.2",
@@ -21,6 +30,7 @@
     "chai-as-promised": "^7.1.1",
     "mocha": "^10.0.0",
     "prettier": "^2.6.2",
+    "rimraf": "^3.0.2",
     "sinon": "^14.0.0",
     "ts-mocha": "^10.0.0",
     "typescript": "^4.3.5"
