@@ -69,11 +69,11 @@ const wallet = new anchor.Wallet(keypair);
 // this will be the wallet provided by the adapter
 const wallet = useWallet();
 
-const provider = new anchor.AnchorProvider({
+const provider = new anchor.AnchorProvider(
   connection,
   wallet,
-  opts: anchor.AnchorProvider.defaultOptions(),
-});
+  anchor.AnchorProvider.defaultOptions()
+);
 ```
 
 ### Create a new derived pass

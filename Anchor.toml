@@ -1,7 +1,7 @@
 [features]
 seeds = false
 [programs.localnet]
-gateway_derive = "dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip"
+gateway_derive = "derd45BqhDfR4w5R45ohkTuimsRegTP6KnXkmT7x9HH"
 
 [registry]
 url = "https://anchor.projectserum.com"
