@@ -14,7 +14,7 @@ use std::str::FromStr;
 #[macro_use]
 extern crate num_derive;
 
-declare_id!("dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip");
+declare_id!("derd45BqhDfR4w5R45ohkTuimsRegTP6KnXkmT7x9HH");
 
 #[derive(Debug, Clone)]
 pub struct Gateway;

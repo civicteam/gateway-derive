@@ -9,7 +9,7 @@ import { GatewayDerive } from "../../target/types/gateway_derive";
 const GATEKEEPER_SEED = "gateway_derive_gk_seed";
 const FEE_SEED = "gateway_derive_fee_seed";
 const DERIVED_PASS_PROGRAM = new web3.PublicKey(
-  "dpKGstEdwqh8pDfFh3Qrp1yJ85xbvbZtTcjRaq1yqip"
+  "derd45BqhDfR4w5R45ohkTuimsRegTP6KnXkmT7x9HH"
 );
 const DERIVED_PASS_PROPERTIES_SIZE = 8 + 1 + 1;
 
