@@ -12,6 +12,7 @@ const constituentPass = new web3.PublicKey("uniqobk8oGh4XBLMqM68K8M2zNu3CdYX7q5g
     constituentPass
   ], {
     expireOnUse: true,
+    expireDuration: 365 * 24 * 60 * 60, // expires in 1 year - an expireOnUse token must have some expiry time already set
     refreshDisabled: true,
   });
 

@@ -136,7 +136,7 @@ describe("gateway-derive", () => {
           owner.publicKey,
           derivedPass
         );
-        expect(foundToken.publicKey.toBase58()).to.equal(
+        expect(foundToken?.publicKey.toBase58()).to.equal(
           gatewayToken.toBase58()
         );
       });
@@ -381,10 +381,10 @@ describe("gateway-derive", () => {
         owner.publicKey,
         derivedPass
       );
-      expect(foundToken.publicKey.toBase58()).to.equal(gatewayToken.toBase58());
+      expect(foundToken?.publicKey.toBase58()).to.equal(gatewayToken.toBase58());
 
       const buffer = 5;
-      expect(foundToken.expiryTime).to.be.greaterThanOrEqual(
+      expect(foundToken?.expiryTime).to.be.greaterThanOrEqual(
         now + EXPIRE_DURATION - buffer
       );
     });
@@ -424,7 +424,7 @@ describe("gateway-derive", () => {
         owner.publicKey,
         derivedPass
       );
-      expect(foundToken.publicKey.toBase58()).to.equal(gatewayToken.toBase58());
+      expect(foundToken?.publicKey.toBase58()).to.equal(gatewayToken.toBase58());
 
       // TODO check expire works
     });
@@ -465,11 +465,14 @@ describe("gateway-derive", () => {
     before("derive an expired pass", async () => {
       await service.issue(authority, derivedPass);
 
-      derivedPassGatewayToken = await findGatewayToken(
+      const foundToken = await findGatewayToken(
         authorityProvider.connection,
         owner.publicKey,
         derivedPass
       );
+
+      if (!foundToken) throw new Error("Token not found");
+      derivedPassGatewayToken = foundToken;
     });
 
     it("should not allow refresh", async () => {

@@ -26,6 +26,7 @@
     "@types/chai-as-promised": "^7.1.5",
     "@types/mocha": "^9.1.1",
     "@types/ramda": "^0.28.12",
+    "@types/sinon": "^10.0.12",
     "chai": "^4.3.4",
     "chai-as-promised": "^7.1.1",
     "mocha": "^10.0.0",

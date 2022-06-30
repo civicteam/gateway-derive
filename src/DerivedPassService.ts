@@ -98,6 +98,8 @@ export class DerivedPassService {
 
     const remainingAccounts = [];
     if (properties.expireOnUse) {
+      if (!properties.expireDuration) throw new Error("Only expirable tokens can be marked as expireOnUse");
+
       const feature = new NetworkFeature({
         userTokenExpiry: new UserTokenExpiry({}),
       });

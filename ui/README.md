@@ -1,6 +1,27 @@
-# Getting Started with Create React App
+# Example UI
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This is a sample UI for generating derived passes.
+
+To use:
+
+1) Run
+
+```shell
+export ANCHOR_WALLET=<your wallet path> # usually ~/.config/solana/id.json
+export  ANCHOR_PROVIDER_URL=<your rpc endpoint>
+yarn createPass
+```
+
+Expected result:
+
+```
+Authority: <your wallet>
+Derived Pass: <your derived pass>
+```
+
+2) Copy .env.example to .env, and copy the values returned from the above script into it.
+
+3) Run `yarn start`
 
 ## Available Scripts
 
