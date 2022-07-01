@@ -1,13 +1,12 @@
-import {useConnection, useWallet} from "@solana/wallet-adapter-react";
-import {useEffect, useState} from "react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useEffect, useState } from "react";
 import { DerivedPassService } from "@civic/solana-derived-pass";
-import {AnchorProvider, Wallet} from "@project-serum/anchor";
+import { AnchorProvider, Wallet } from "@project-serum/anchor";
 
 export const useDerivedPass = () => {
   const wallet = useWallet();
   const { connection } = useConnection();
-  const [service, setService] = useState<DerivedPassService>()
-
+  const [service, setService] = useState<DerivedPassService>();
 
   useEffect(() => {
     if (!wallet || !wallet.publicKey || !connection) return;
@@ -18,8 +17,8 @@ export const useDerivedPass = () => {
       AnchorProvider.defaultOptions()
     );
 
-    DerivedPassService.build(provider).then(setService)
+    DerivedPassService.build(provider).then(setService);
   }, [wallet, connection]);
 
   return service;
-}
+};

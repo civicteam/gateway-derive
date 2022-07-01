@@ -381,7 +381,9 @@ describe("gateway-derive", () => {
         owner.publicKey,
         derivedPass
       );
-      expect(foundToken?.publicKey.toBase58()).to.equal(gatewayToken.toBase58());
+      expect(foundToken?.publicKey.toBase58()).to.equal(
+        gatewayToken.toBase58()
+      );
 
       const buffer = 5;
       expect(foundToken?.expiryTime).to.be.greaterThanOrEqual(
@@ -403,6 +405,7 @@ describe("gateway-derive", () => {
       );
       [, derivedPass] = await authorityService.derivePass(sourceGknKeys, {
         expireOnUse: true,
+        expireDuration: 365 * 24 * 60 * 60, // 1 year. expireOnUse passes must have some expiry set.
       });
 
       service = new DerivedPassService(program, ownerProvider);
@@ -424,7 +427,9 @@ describe("gateway-derive", () => {
         owner.publicKey,
         derivedPass
       );
-      expect(foundToken?.publicKey.toBase58()).to.equal(gatewayToken.toBase58());
+      expect(foundToken?.publicKey.toBase58()).to.equal(
+        gatewayToken.toBase58()
+      );
 
       // TODO check expire works
     });
