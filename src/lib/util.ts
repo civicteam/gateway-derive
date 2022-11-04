@@ -50,7 +50,7 @@ export const fetchProgram = async (
     provider
   );
 
-  if (!idl) throw new Error("Notification IDL could not be found");
+  if (!idl) throw new Error("GatewayDerive IDL could not be found");
 
   return new Program<GatewayDerive>(
     idl,

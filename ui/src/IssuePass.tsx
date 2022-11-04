@@ -34,7 +34,7 @@ export const IssuePass:FC = () => {
   const getTheThing = useCallback(async () => {
     if (!service || !authority || !derivedPass) return;
 
-    service.issue(authority, derivedPass).then(() => setDone(true)).catch(e => setError(handleError(e)));
+    service.issue(authority, derivedPass).then(() => setDone(true)).catch((e: any) => setError(handleError(e)));
 
   }, [service, authority, derivedPass, setError])
 

@@ -101,7 +101,7 @@ jobs:
         run: |
           export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
-          solana-keygen new
+          solana-keygen new --silent --no-bip39-passphrase
 
       - name: build programs
         run: |
