@@ -1,5 +1,6 @@
 import { DerivedPassService } from "../../dist/src";
 import { AnchorProvider, web3 } from "@project-serum/anchor";
+import "./util";
 
 // Civic Uniqueness Pass
 const constituentPass = new web3.PublicKey(

@@ -18,13 +18,13 @@ import './App.css';
 
 function App() {
   const network = WalletAdapterNetwork.Devnet;
-  const endpoint = useMemo(() => clusterApiUrl(network), [network]);
+  // const endpoint = useMemo(() => clusterApiUrl(network), [network]);
+  const endpoint = "https://rough-misty-night.solana-mainnet.quiknode.pro/b57300ff234c12e95763e9b8cda67e9d86772a0d/";
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
       new GlowWalletAdapter(),
-      new SlopeWalletAdapter(),
-      new SolflareWalletAdapter({ network }),
+      new SolflareWalletAdapter(),
       new TorusWalletAdapter(),
       new SolletWalletAdapter({ network }),
     ],
